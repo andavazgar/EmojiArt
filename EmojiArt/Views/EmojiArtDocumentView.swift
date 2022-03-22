@@ -22,16 +22,22 @@ struct EmojiArtDocumentView: View {
     private var documentBody: some View {
         GeometryReader { geometry in
             ZStack {
-                Color.yellow
+                Color.white.overlay(
+                    OptionalImage(uiImage: document.backgroundImage)
+                )
                 
-                ForEach(document.emojis) { emoji in
-                    Text(emoji.text)
-                        .font(.system(size: fontSize(for: emoji)))
-                        .position(position(for: emoji, in: geometry))
+                if document.isLoadingBackgroundImage {
+                    ProgressView().scaleEffect(2)
+                } else {
+                    ForEach(document.emojis) { emoji in
+                        Text(emoji.text)
+                            .font(.system(size: fontSize(for: emoji)))
+                            .position(position(for: emoji, in: geometry))
+                    }
                 }
             }
-            .onDrop(of: [.plainText], isTargeted: nil) { providers, location in
-                dropEmojiIntoDocument(providers: providers, at: location, in: geometry)
+            .onDrop(of: [.plainText, .url, .image], isTargeted: nil) { providers, location in
+                dropIntoDocument(providers: providers, at: location, in: geometry)
             }
         }
     }
@@ -49,13 +55,29 @@ struct EmojiArtDocumentView: View {
         convertFromEmojiCoordinates(emoji.location, in: geometry)
     }
     
-    private func dropEmojiIntoDocument(providers: [NSItemProvider], at location: CGPoint, in geometry: GeometryProxy) -> Bool {
-        providers.loadObjects(ofType: String.self) { string in
-            guard let emoji = string.first, emoji.isEmoji else { return }
-            
-            let emojiLocation = convertToEmojiCoordinates(location, in: geometry)
-            document.addEmoji(String(emoji), at: emojiLocation, withSize: Int(defaultEmojiFontSize))
+    private func dropIntoDocument(providers: [NSItemProvider], at location: CGPoint, in geometry: GeometryProxy) -> Bool {
+        var found = providers.loadObjects(ofType: URL.self) { url in
+            document.setBackground(.url(url.imageURL))
         }
+        
+        if !found {
+            found = providers.loadObjects(ofType: UIImage.self) { image in
+                if let imageData = image.jpegData(compressionQuality: 1.0) {
+                    document.setBackground(.imageData(imageData))
+                }
+            }
+        }
+        
+        if !found {
+            found = providers.loadObjects(ofType: String.self) { string in
+                guard let emoji = string.first, emoji.isEmoji else { return }
+                
+                let emojiLocation = convertToEmojiCoordinates(location, in: geometry)
+                document.addEmoji(String(emoji), at: emojiLocation, withSize: Int(defaultEmojiFontSize))
+            }
+        }
+        
+        return found
     }
     
     private func convertFromEmojiCoordinates(_ location: (x: Int, y: Int), in geometry: GeometryProxy) -> CGPoint {

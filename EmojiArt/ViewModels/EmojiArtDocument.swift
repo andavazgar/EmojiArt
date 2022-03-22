@@ -11,7 +11,16 @@ class EmojiArtDocument: ObservableObject {
     typealias Background = EmojiArt.Background
     typealias Emoji = EmojiArt.Emoji
     
-    @Published private(set) var emojiArt: EmojiArt
+    @Published private(set) var emojiArt: EmojiArt {
+        didSet {
+            if emojiArt.background != oldValue.background {
+                updateBackgroundImage()
+            }
+        }
+    }
+    @Published var backgroundImage: UIImage?
+    @Published var isLoadingBackgroundImage = false
+    
     var emojis: [Emoji] { emojiArt.emojis }
     var background: Background { emojiArt.background }
     
@@ -21,6 +30,31 @@ class EmojiArtDocument: ObservableObject {
         emojiArt = EmojiArt()
         emojiArt.addEmoji("😀", at: (x: -200, y: -100), withSize: 80)
         emojiArt.addEmoji("😉", at: (x: 50, y: 100), withSize: 40)
+    }
+    
+    private func updateBackgroundImage() {
+        switch emojiArt.background {
+        case .url(let url):
+            isLoadingBackgroundImage = true
+            
+            DispatchQueue.global(qos: .userInitiated).async {
+                let imageData = try? Data(contentsOf: url)
+                
+                DispatchQueue.main.async { [weak self] in
+                    self?.isLoadingBackgroundImage = false
+                    
+                    if imageData != nil {
+                        if self?.emojiArt.background == Background.url(url) {
+                            self?.backgroundImage = UIImage(data: imageData!)
+                        }
+                    }
+                }
+            }
+        case .imageData(let imageData):
+            backgroundImage = UIImage(data: imageData)
+        default:
+            backgroundImage = nil
+        }
     }
     
     
