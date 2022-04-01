@@ -12,6 +12,19 @@ struct EmojiArtDocumentView: View {
     let defaultEmojiFontSize = 40.0
     let testEmojis = "😀😃😄😁😆🥹😅😂🤣🥲☺️😊😇🙂🙃😉😌"
     
+    @State private var currentZoomScale: CGFloat = 1
+    @GestureState private var gestureZoomScale: CGFloat = 1
+    private var zoomScale: CGFloat {
+        currentZoomScale * gestureZoomScale
+    }
+    
+    @State private var currentPanOffset = CGSize.zero
+    @GestureState private var gesturePanOffset = CGSize.zero
+    private var panOffset: CGSize {
+        (currentPanOffset + gesturePanOffset) * zoomScale
+    }
+    
+    
     var body: some View {
         VStack(spacing: 0) {
             documentBody
@@ -24,7 +37,10 @@ struct EmojiArtDocumentView: View {
             ZStack {
                 Color.white.overlay(
                     OptionalImage(uiImage: document.backgroundImage)
+                        .position(convertFromEmojiCoordinates((x: 0, y: 0), in: geometry))
+                        .scaleEffect(zoomScale)
                 )
+                .gesture(doubleTapToZoom(in: geometry.size))
                 
                 if document.isLoadingBackgroundImage {
                     ProgressView().scaleEffect(2)
@@ -32,13 +48,16 @@ struct EmojiArtDocumentView: View {
                     ForEach(document.emojis) { emoji in
                         Text(emoji.text)
                             .font(.system(size: fontSize(for: emoji)))
+                            .scaleEffect(zoomScale)
                             .position(position(for: emoji, in: geometry))
                     }
                 }
             }
+            .clipped()
             .onDrop(of: [.plainText, .url, .image], isTargeted: nil) { providers, location in
                 dropIntoDocument(providers: providers, at: location, in: geometry)
             }
+            .gesture(panGesture().simultaneously(with: zoomGesture()))
         }
     }
     
@@ -56,10 +75,12 @@ struct EmojiArtDocumentView: View {
     }
     
     private func dropIntoDocument(providers: [NSItemProvider], at location: CGPoint, in geometry: GeometryProxy) -> Bool {
+        // An URL was dropped
         var found = providers.loadObjects(ofType: URL.self) { url in
             document.setBackground(.url(url.imageURL))
         }
         
+        // An image was dropped
         if !found {
             found = providers.loadObjects(ofType: UIImage.self) { image in
                 if let imageData = image.jpegData(compressionQuality: 1.0) {
@@ -68,12 +89,13 @@ struct EmojiArtDocumentView: View {
             }
         }
         
+        // An emoji was dropped
         if !found {
             found = providers.loadObjects(ofType: String.self) { string in
                 guard let emoji = string.first, emoji.isEmoji else { return }
                 
                 let emojiLocation = convertToEmojiCoordinates(location, in: geometry)
-                document.addEmoji(String(emoji), at: emojiLocation, withSize: Int(defaultEmojiFontSize))
+                document.addEmoji(String(emoji), at: emojiLocation, withSize: Int(defaultEmojiFontSize / zoomScale))
             }
         }
         
@@ -84,19 +106,63 @@ struct EmojiArtDocumentView: View {
         let center = geometry.frame(in: .local).center
         
         return CGPoint(
-            x: center.x + CGFloat(location.x),
-            y: center.y + CGFloat(location.y)
+            x: center.x + CGFloat(location.x) * zoomScale + panOffset.width,
+            y: center.y + CGFloat(location.y) * zoomScale + panOffset.height
         )
     }
     
     private func convertToEmojiCoordinates(_ location: CGPoint, in geometry: GeometryProxy) -> (x: Int, y: Int) {
         let center = geometry.frame(in: .local).center
         let emojiLocation = CGPoint(
-            x: location.x - center.x,
-            y: location.y - center.y
+            x: (location.x - center.x - panOffset.width) / zoomScale,
+            y: (location.y - center.y - panOffset.height) / zoomScale
         )
         
         return (x: Int(emojiLocation.x), y: Int(emojiLocation.y))
+    }
+    
+    private func zoomToFit(_ image: UIImage?, in size: CGSize) {
+        guard let image = image,
+              image.size.width > 0, image.size.height > 0,
+              size.width > 0, size.height > 0
+        else { return }
+        
+        let hZoom = size.width / image.size.width
+        let vZoom = size.height / image.size.height
+        currentZoomScale = min(hZoom, vZoom)
+        
+        // reset panOffset
+        currentPanOffset = .zero
+    }
+    
+    // MARK: - Gestures
+    private func zoomGesture() -> some Gesture {
+        MagnificationGesture()
+            .updating($gestureZoomScale) { latestGestureScale, gestureZoomScale, _ in
+                gestureZoomScale = latestGestureScale
+            }
+            .onEnded { endGestureScale in
+                currentZoomScale *= endGestureScale
+            }
+    }
+    
+    private func doubleTapToZoom(in size: CGSize) -> some Gesture {
+        TapGesture(count: 2)
+            .onEnded {
+                withAnimation {
+                    zoomToFit(document.backgroundImage, in: size)
+                }
+            }
+    }
+    
+    private func panGesture() -> some Gesture {
+        DragGesture()
+            .updating($gesturePanOffset) { latestDragGestureValue, gesturePanOffset, _ in
+                gesturePanOffset = latestDragGestureValue.translation / zoomScale
+            }
+            .onEnded { finalDragGestureValue in
+                currentPanOffset = currentPanOffset + (finalDragGestureValue.translation / zoomScale)
+            }
     }
 }
 
