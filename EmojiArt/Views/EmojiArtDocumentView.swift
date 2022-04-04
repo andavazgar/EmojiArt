@@ -9,6 +9,7 @@ import SwiftUI
 
 struct EmojiArtDocumentView: View {
     @ObservedObject var document: EmojiArtDocument
+    @State var selectedEmojis = Set<EmojiArt.Emoji>()
     let defaultEmojiFontSize = 40.0
     let testEmojis = "😀😃😄😁😆🥹😅😂🤣🥲☺️😊😇🙂🙃😉😌"
     
@@ -23,6 +24,8 @@ struct EmojiArtDocumentView: View {
     private var panOffset: CGSize {
         (currentPanOffset + gesturePanOffset) * zoomScale
     }
+    
+    @GestureState private var gestureEmojiMovement = CGSize.zero
     
     
     var body: some View {
@@ -40,16 +43,32 @@ struct EmojiArtDocumentView: View {
                         .position(convertFromEmojiCoordinates((x: 0, y: 0), in: geometry))
                         .scaleEffect(zoomScale)
                 )
-                .gesture(doubleTapToZoom(in: geometry.size))
+                .gesture(doubleTapToZoom(in: geometry.size).exclusively(before: deselectAllEmojisGesture()))
                 
                 if document.isLoadingBackgroundImage {
                     ProgressView().scaleEffect(2)
                 } else {
                     ForEach(document.emojis) { emoji in
-                        Text(emoji.text)
-                            .font(.system(size: fontSize(for: emoji)))
-                            .scaleEffect(zoomScale)
-                            .position(position(for: emoji, in: geometry))
+                        ZStack(alignment: .topTrailing) {
+                            Text(emoji.text)
+                                .font(.system(size: fontSize(for: emoji)))
+                                .scaleEffect(zoomScale)
+                                .border(selectedEmojis.contains(emoji) ? .blue : .clear, width: Constants.borderWidth)
+                                .onTapGesture(perform: { toggleEmojiSelection(emoji) })
+                            
+                            if selectedEmojis.contains(emoji) {
+                                Button(action: {
+                                    document.deleteEmoji(emoji)
+                                }, label: {
+                                    Image(systemName: "x.circle.fill")
+                                        .foregroundStyle(.white, .red)
+                                        .font(Font.system(size: Constants.deleteButton.fontSize))
+                                })
+                                .offset(x: Constants.deleteButton.offset.x, y: Constants.deleteButton.offset.y)
+                            }
+                        }
+                        .position(position(for: emoji, in: geometry))
+                        .gesture(moveEmojisGesture())
                     }
                 }
             }
@@ -71,7 +90,28 @@ struct EmojiArtDocumentView: View {
     }
     
     private func position(for emoji: EmojiArt.Emoji, in geometry: GeometryProxy) -> CGPoint {
-        convertFromEmojiCoordinates(emoji.location, in: geometry)
+        var emojiLocation = emoji.location
+        
+        if selectedEmojis.contains(emoji) {
+            emojiLocation = (
+                x: emoji.location.x + Int(gestureEmojiMovement.width),
+                y: emoji.location.y + Int(gestureEmojiMovement.height)
+            )
+        }
+        
+        return convertFromEmojiCoordinates(emojiLocation, in: geometry)
+    }
+    
+    private func toggleEmojiSelection(_ emoji: EmojiArt.Emoji) {
+        if selectedEmojis.contains(emoji) {
+            selectedEmojis.remove(emoji)
+        } else {
+            selectedEmojis.insert(emoji)
+        }
+    }
+    
+    private func deselectAllEmojis() {
+        selectedEmojis = []
     }
     
     private func dropIntoDocument(providers: [NSItemProvider], at location: CGPoint, in geometry: GeometryProxy) -> Bool {
@@ -142,7 +182,13 @@ struct EmojiArtDocumentView: View {
                 gestureZoomScale = latestGestureScale
             }
             .onEnded { endGestureScale in
-                currentZoomScale *= endGestureScale
+                if selectedEmojis.isEmpty {
+                    currentZoomScale *= endGestureScale
+                } else {
+                    for emoji in selectedEmojis {
+                        document.scaleEmoji(emoji, by: endGestureScale)
+                    }
+                }
             }
     }
     
@@ -163,6 +209,34 @@ struct EmojiArtDocumentView: View {
             .onEnded { finalDragGestureValue in
                 currentPanOffset = currentPanOffset + (finalDragGestureValue.translation / zoomScale)
             }
+    }
+    
+    private func moveEmojisGesture() -> some Gesture {
+        DragGesture()
+            .updating($gestureEmojiMovement) { latestDragGestureValue, gestureEmojiMovement, _ in
+                gestureEmojiMovement = latestDragGestureValue.translation
+            }
+            .onEnded { finalDragGestureValue in
+                for emoji in selectedEmojis {
+                    document.moveEmoji(emoji, by: finalDragGestureValue.translation)
+                }
+            }
+    }
+    
+    private func deselectAllEmojisGesture() -> some Gesture {
+        TapGesture()
+            .onEnded {
+                deselectAllEmojis()
+            }
+    }
+    
+    // MARK: - Constants
+    private struct Constants {
+        static let borderWidth = 2.0
+        static let deleteButton = (
+            fontSize: 24.0,
+            offset: (x: 13.0, y: -13.0)
+        )
     }
 }
 

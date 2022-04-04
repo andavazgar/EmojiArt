@@ -19,6 +19,9 @@ struct EmojiArt {
         emojis.append(Emoji(id: uniqueEmojiId, text: text, location: location, size: size))
     }
     
+    mutating func deleteEmoji(_ emoji: Emoji) {
+        emojis.remove(emoji)
+    }
     
     // MARK: - Emoji
     struct Emoji: Identifiable, Hashable {
