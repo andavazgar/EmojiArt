@@ -8,7 +8,7 @@
 import Foundation
 
 extension EmojiArt {
-    enum Background: Equatable {
+    enum Background: Equatable, Codable {
         case blank
         case url(URL)
         case imageData(Data)

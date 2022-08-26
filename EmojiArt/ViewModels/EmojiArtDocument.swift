@@ -13,6 +13,7 @@ class EmojiArtDocument: ObservableObject {
     
     @Published private(set) var emojiArt: EmojiArt {
         didSet {
+            scheduleAutosave()
             if emojiArt.background != oldValue.background {
                 updateBackgroundImage()
             }
@@ -21,15 +22,21 @@ class EmojiArtDocument: ObservableObject {
     @Published var backgroundImage: UIImage?
     @Published var isLoadingBackgroundImage = false
     
+    private var autosaveTimer: Timer?
     var emojis: [Emoji] { emojiArt.emojis }
     var background: Background { emojiArt.background }
     
     
     // MARK: - Methods
     init() {
-        emojiArt = EmojiArt()
-        emojiArt.addEmoji("😀", at: (x: -200, y: -100), withSize: 80)
-        emojiArt.addEmoji("😉", at: (x: 50, y: 100), withSize: 40)
+        if let url = Autosave.url, let autosavedEmojiArt = try? EmojiArt(url: url) {
+            self.emojiArt = autosavedEmojiArt
+            updateBackgroundImage()
+        } else {
+            emojiArt = EmojiArt()
+            //        emojiArt.addEmoji("😀", at: (x: -200, y: -100), withSize: 80)
+            //        emojiArt.addEmoji("😉", at: (x: 50, y: 100), withSize: 40)
+        }
     }
     
     private func updateBackgroundImage() {
@@ -55,6 +62,33 @@ class EmojiArtDocument: ObservableObject {
         default:
             backgroundImage = nil
         }
+    }
+    
+    private func save(to url: URL) {
+        let thisFunction = "\(String(describing: self)).\(#function)"
+        do {
+            let data = try emojiArt.json()
+            print("\(thisFunction), JSON = \(String(data: data, encoding: .utf8) ?? "nil")")
+            try data.write(to: url)
+            print("\(thisFunction) success!")
+        } catch let encodingError where encodingError is EncodingError {
+            print("\(thisFunction) couldn't encode EmojiArt as JSON because \(encodingError.localizedDescription)")
+        } catch {
+            print("\(thisFunction) error: \(error)")
+        }
+    }
+    
+    private func autosave() {
+        if let url = Autosave.url {
+            save(to: url)
+        }
+    }
+    
+    private func scheduleAutosave() {
+        autosaveTimer?.invalidate()
+        autosaveTimer = Timer.scheduledTimer(withTimeInterval: Autosave.autosaveDelay, repeats: false, block: { _ in
+            self.autosave()
+        })
     }
     
     
@@ -83,5 +117,15 @@ class EmojiArtDocument: ObservableObject {
             let newSize = (CGFloat(emojiArt.emojis[index].size) * scale).rounded(.toNearestOrAwayFromZero)
             emojiArt.emojis[index].size = Int(newSize)
         }
+    }
+    
+    // MARK: - Constants
+    private struct Autosave {
+        static let filename = "Autosaved.emojiart"
+        static var url: URL? {
+            let documentDirectory = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first
+            return documentDirectory?.appendingPathComponent(filename)
+        }
+        static let autosaveDelay = 5.0
     }
 }

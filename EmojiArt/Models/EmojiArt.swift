@@ -7,12 +7,21 @@
 
 import Foundation
 
-struct EmojiArt {
+struct EmojiArt: Codable {
     var background = Background.blank
     var emojis = [Emoji]()
     private var uniqueEmojiId = 0
     
     init() { }
+    
+    init(json: Data) throws {
+        self = try JSONDecoder().decode(EmojiArt.self, from: json)
+    }
+    
+    init(url: URL) throws {
+        let data = try Data(contentsOf: url)
+        self = try EmojiArt(json: data)
+    }
     
     mutating func addEmoji(_ text: String, at location: (x: Int, y: Int), withSize size: Int) {
         uniqueEmojiId += 1
@@ -23,8 +32,13 @@ struct EmojiArt {
         emojis.remove(emoji)
     }
     
+    func json() throws -> Data {
+        return try JSONEncoder().encode(self)
+    }
+    
+    
     // MARK: - Emoji
-    struct Emoji: Identifiable, Hashable {
+    struct Emoji: Identifiable, Hashable, Codable {
         let id: Int
         let text: String
         var location: (x: Int, y: Int)  // Offset from the center
@@ -38,6 +52,32 @@ struct EmojiArt {
         }
         
         // MARK: Conformance to protocols
+        private enum CodingKeys: CodingKey {
+            case id, text, locationX, locationY, size
+        }
+        
+        // Conformance to Decodable
+        init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            self.id = try container.decode(Int.self, forKey: .id)
+            self.text = try container.decode(String.self, forKey: .text)
+            self.size = try container.decode(Int.self, forKey: .size)
+            
+            let x = try container.decode(Int.self, forKey: .locationX)
+            let y = try container.decode(Int.self, forKey: .locationY)
+            self.location = (x, y)
+        }
+        
+        // Conformance to Encodable
+        func encode(to encoder: Encoder) throws {
+            var container = encoder.container(keyedBy: CodingKeys.self)
+            try container.encode(id, forKey: .id)
+            try container.encode(text, forKey: .text)
+            try container.encode(location.x, forKey: .locationX)
+            try container.encode(location.y, forKey: .locationY)
+            try container.encode(size, forKey: .size)
+        }
+        
         // Conformance to Equatable
         static func == (lhs: EmojiArt.Emoji, rhs: EmojiArt.Emoji) -> Bool {
             lhs.id == rhs.id &&
