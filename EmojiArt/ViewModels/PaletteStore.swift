@@ -9,7 +9,7 @@ import SwiftUI
 
 class PaletteStore: ObservableObject {
     let name: String
-    @Published private(set) var palettes = [Palette]() {
+    @Published var palettes = [Palette]() {
         didSet {
             storeInUserDefaults()
         }
