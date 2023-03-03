@@ -105,15 +105,15 @@ class EmojiArtDocument: ObservableObject {
         emojiArt.deleteEmoji(emoji)
     }
     
-    func moveEmoji(_ emoji: Emoji, by offset: CGSize) {
-        if let index = emojiArt.emojis.index(matching: emoji) {
+    func moveEmoji(withID emojiID: Int, by offset: CGSize) {
+        if let index = emojiArt.emojis.firstIndex(where: { $0.id == emojiID }) {
             emojiArt.emojis[index].location.x += Int(offset.width)
             emojiArt.emojis[index].location.y += Int(offset.height)
         }
     }
     
-    func scaleEmoji(_ emoji: Emoji, by scale: CGFloat) {
-        if let index = emojiArt.emojis.index(matching: emoji) {
+    func scaleEmoji(withID emojiID: Int, by scale: CGFloat) {
+        if let index = emojiArt.emojis.firstIndex(where: { $0.id == emojiID }) {
             let newSize = (CGFloat(emojiArt.emojis[index].size) * scale).rounded(.toNearestOrAwayFromZero)
             emojiArt.emojis[index].size = Int(newSize)
         }

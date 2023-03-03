@@ -145,5 +145,7 @@ struct ScrollingEmojisView: View {
 struct PaletteChooser_Previews: PreviewProvider {
     static var previews: some View {
         PaletteChooser()
+            .environmentObject(PaletteStore(named: "Default"))
+            .previewLayout(.sizeThatFits)
     }
 }
