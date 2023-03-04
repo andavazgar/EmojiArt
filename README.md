@@ -1,6 +1,6 @@
 # EmojiArt
 
-Assignment 5 for the course Stanford CS193p (Spring 2021).\
+Assignment 5 for [Stanford University's course CS193p](https://cs193p.sites.stanford.edu) (Developing Applications for iOS) of Spring 2021.\
 The goal of this assignment is to learn about how to deal with multi-touch gestures.
 
 
