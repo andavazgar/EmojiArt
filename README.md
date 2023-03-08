@@ -9,7 +9,7 @@ The goal of this assignment is to learn about how to deal with multi-touch gestu
 
 
 ## What is EmojiArt?
-`EmojiArt` is an application that allows to Drag and Drop emojis on top of a background image. The user can build many palettes with different categories of emojis. The pallets can edited to the users liking. The canvas as well as the emojis placed in it can be moved and resized through intuitive gestures.
+`EmojiArt` is an application that allows to Drag and Drop emojis on top of a background image. The user can build many palettes with different categories of emojis. The pallets can be edited to the users' liking. The canvas as well as the emojis placed in it can be moved and resized through intuitive gestures.
 
 
 ## Technologies
